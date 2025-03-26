@@ -3,8 +3,6 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Asistente de Voz" Height="350" Width="525">
     <Grid>
-        <Button Name="btnIniciar" Content="Iniciar Reconocimiento de Voz" HorizontalAlignment="Left" VerticalAlignment="Top" Width="200" Height="40" Margin="10,10,0,0" Click="btnIniciar_Click"/>
-        <Button Name="btnDetener" Content="Detener Reconocimiento de Voz" HorizontalAlignment="Left" VerticalAlignment="Top" Width="200" Height="40" Margin="10,60,0,0" Click="btnDetener_Click"/>
-        <TextBox Name="txtResultado" HorizontalAlignment="Left" VerticalAlignment="Top" Height="100" Width="400" Margin="10,160,0,0" IsReadOnly="True" TextWrapping="Wrap"/>
+        <TextBox Name="txtResultado" HorizontalAlignment="Left" VerticalAlignment="Top" Height="223" Width="488" Margin="10,66,0,0" IsReadOnly="True" TextWrapping="Wrap"/>
     </Grid>
 </Window>

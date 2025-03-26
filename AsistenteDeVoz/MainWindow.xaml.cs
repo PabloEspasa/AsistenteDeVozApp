@@ -4,305 +4,230 @@ using System.Runtime.InteropServices;
 using System.Speech.Recognition;
 using System.Speech.Synthesis;
 using System.Windows;
-using WindowsInput;
 
 namespace AsistenteVozApp
 {
     public partial class MainWindow : Window
     {
-        private SpeechRecognitionEngine recognizer;
+        private SpeechRecognitionEngine recognizerPrincipal;
+        private SpeechRecognitionEngine recognizerEspera;
         private SpeechSynthesizer synthesizer;
-        private bool escribiendo = false;
-        private Grammar grammarDictado;
         private Grammar grammarComandos;
+        private Grammar grammarEspera;
+        private SpeechSynthesizer sintetizador = new SpeechSynthesizer();
 
         public MainWindow()
         {
             InitializeComponent();
 
-            // Verificar los idiomas disponibles
-            var recognizerInfo = SpeechRecognitionEngine.InstalledRecognizers();
-            foreach (var recognizerInfoItem in recognizerInfo)
-            {
-                Console.WriteLine("Idioma disponible: " + recognizerInfoItem.Culture.Name);
-            }
-
-            // Inicialización de SpeechSynthesizer
             synthesizer = new SpeechSynthesizer();
             synthesizer.SetOutputToDefaultAudioDevice();
 
-            // Inicialización de SpeechRecognitionEngine
-            recognizer = new SpeechRecognitionEngine(new CultureInfo("es-ES"));
-            recognizer.SetInputToDefaultAudioDevice();
-            recognizer.SpeechRecognized += Recognizer_SpeechRecognized;
+            // *** Inicializar el reconocimiento de "modo espera" (solo escucha "Hola") ***
+            recognizerEspera = new SpeechRecognitionEngine(new CultureInfo("es-ES"));
+            recognizerEspera.SetInputToDefaultAudioDevice();
+            recognizerEspera.SpeechRecognized += RecognizerEspera_SpeechRecognized;
 
-            var grammarBuilder = new GrammarBuilder();
+            GrammarBuilder grammarBuilderEspera = new GrammarBuilder();
+            grammarBuilderEspera.Append(new Choices("Hola"));
+            grammarBuilderEspera.Culture = new CultureInfo("es-ES");
+            grammarEspera = new Grammar(grammarBuilderEspera);
 
-            // Agregar frases o palabras que quieres que se reconozcan
-            grammarBuilder.Append(new Choices("navegador", "discord", "calculadora", "notepad", "dictado", "detener dictado", "abrir whatsapp"));
+
+            recognizerEspera.LoadGrammar(grammarEspera);
+            recognizerEspera.RecognizeAsync(RecognizeMode.Multiple);
+
+
+            recognizerPrincipal = new SpeechRecognitionEngine(new CultureInfo("es-ES"));
+            recognizerPrincipal.SetInputToDefaultAudioDevice();
+            recognizerPrincipal.SpeechRecognized += RecognizerPrincipal_SpeechRecognized;
+
+            GrammarBuilder grammarBuilder = new GrammarBuilder();
+            grammarBuilder.Append(new Choices("Adiós", "navegador", "discord", "calculadora", "notepad", "whatsapp", "instagram", "chat gpt", "youtube", "twitch", "kick"));
             grammarBuilder.Culture = new CultureInfo("es-ES");
-
-            // Crear la gramática con el GrammarBuilder
             grammarComandos = new Grammar(grammarBuilder);
 
-            // Cargar la gramática personalizada en el reconocedor
-            recognizer.LoadGrammar(grammarComandos);
+            recognizerPrincipal.LoadGrammar(grammarComandos);
         }
 
-        // Iniciar el reconocimiento de voz
-        private void btnIniciar_Click(object sender, RoutedEventArgs e)
+
+        private async void RecognizerEspera_SpeechRecognized(object? sender, SpeechRecognizedEventArgs e)
         {
-            IniciarReconocimiento();
-        }
+            string comando = e.Result.Text.ToLower();
 
-        private void IniciarReconocimiento()
-        {
-            try
+            if (comando == "hola")
             {
-                recognizer.RecognizeAsync(RecognizeMode.Multiple);
-                txtResultado.Text = "Reconocimiento de voz iniciado. Di algo...";
-            }
-            catch (Exception ex)
-            {
-                txtResultado.Text = $"Error: {ex.Message}";
-            }
-        }
+                sintetizador.SpeakAsync("Hola Pablo, ¿en qué puedo ayudarte?");
 
-        // Detener el reconocimiento de voz
-        private void btnDetener_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                recognizer.RecognizeAsyncStop();
-                txtResultado.Text = "Reconocimiento de voz detenido.";
-            }
-            catch (Exception ex)
-            {
-                txtResultado.Text = $"Error: {ex.Message}";
+                txtResultado.Text = "Reconocimiento activado, di un comando...";
+                recognizerEspera.RecognizeAsyncCancel();
+                recognizerEspera.RecognizeAsyncStop();
+
+                
+                if (recognizerPrincipal.AudioState != AudioState.Stopped)
+                {
+                    recognizerPrincipal.RecognizeAsyncCancel();
+                    recognizerPrincipal.RecognizeAsyncStop();
+                }
+
+                await Task.Delay(500);
+
+                recognizerPrincipal.RecognizeAsync(RecognizeMode.Multiple);
             }
         }
 
-        // Función para reconocer comandos
-        private void Recognizer_SpeechRecognized(object? sender, SpeechRecognizedEventArgs e)
+      
+        private async void  RecognizerPrincipal_SpeechRecognized(object? sender, SpeechRecognizedEventArgs e)
         {
             string comando = e.Result.Text.ToLower();
             txtResultado.Text = $"Reconocido: {comando}";
 
+            if (comando == "adiós")
+            {
+                sintetizador.SpeakAsync("Adiós Pablo, hasta la próxima!");
+
+                recognizerPrincipal.RecognizeAsyncCancel();
+                recognizerPrincipal.RecognizeAsyncStop();
+
+                await Task.Delay(500); // Pausa breve para evitar que se active de inmediato
+
+                recognizerEspera.RecognizeAsync(RecognizeMode.Multiple);
+                return;
+            }
+
+            // Aquí van los comandos que quieres ejecutar
             switch (comando)
             {
-                case string c when c.Contains("navegador"):
+                case "navegador":
                     AbrirNavegador("https://www.google.com/");
                     break;
-                case string c when c.Contains("discord"):
+                case "discord":
                     AbrirDiscord();
                     break;
-                case string c when c.Contains("calculadora"):
+                case "calculadora":
                     AbrirCalculadora();
                     break;
-                case string c when c.Contains("notepad"):
+                case "notepad":
                     AbrirNotepad();
                     break;
-                case string c when c.Contains("dictado"):
-                    IniciarDictado();
-                    break;
-                case string c when c.Contains("detener dictado"):
-                    DetenerDictado();
-                    break;
-                case string c when c.Contains("abrir whatsapp"):
-                    AbrirWsp();
-                    break;
-                case string c when c.Contains("abrir instagram"):
+                case "instagram":
                     AbrirInstagram();
                     break;
-                case string c when c.Contains("abrir chat gpt"):
+                case "chat gpt":
                     AbrirChatGPT();
                     break;
-                case string c when c.Contains("abrir youtube"):
+                case "youtube":
                     AbrirYouTube();
                     break;
-                case string c when c.Contains("abrir twitch"):
+                case "twitch":
                     AbrirTwitch();
                     break;
-                case string c when c.Contains("abrir kick"):
+                case "kick":
                     AbrirKick();
                     break;
                 default:
-                    // Puedes manejar un caso por defecto si no se reconoce el comando
                     txtResultado.Text = "Comando no reconocido";
                     break;
             }
         }
 
-        // Función para abrir Discord
         private void AbrirDiscord()
         {
-            try
+            Process.Start(new ProcessStartInfo
             {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = @"C:\Users\Pablo\AppData\Local\Discord\Update.exe",
-                    Arguments = "--processStart Discord.exe",
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Error al abrir Discord: " + ex.Message);
-            }
+                FileName = @"C:\Users\Pablo\AppData\Local\Discord\Update.exe",
+                Arguments = "--processStart Discord.exe",
+                UseShellExecute = true
+            });
         }
 
-        // Función para abrir la calculadora
-        private void AbrirCalculadora()
-        {
-            try
-            {
-                Process.Start("calc.exe");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Error al abrir la calculadora: " + ex.Message);
-            }
-        }
-
-        private void AbrirNotepad()
-        {
-            try
-            {
-                Process.Start("notepad.exe");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Error al abrir Notepad: " + ex.Message);
-            }
-        }
-
-        private void AbrirWsp()
-        {
-            try
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = @"C:\Program Files\WindowsApps\WhatsApp_**version**_x64__**packageid**\WhatsApp.exe",
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Error al abrir Whatsapp: " + ex.Message);
-            }
-        }
-
-        private void IniciarDictado()
-        {
-            escribiendo = true;
-
-            txtResultado.Text = "Modo de dictado activado. Di algo para escribir.";
-
-            recognizer.SpeechRecognized -= Recognizer_SpeechRecognized;
-
-            recognizer.LoadGrammar(new DictationGrammar());
-
-            recognizer.SpeechRecognized += IniciarDictadoEnNotepad;
-        }
-
-
-        // Función para dictar texto en Notepad
-        private void IniciarDictadoEnNotepad(object? sender, SpeechRecognizedEventArgs e)
-        {
-            string textoDictado = e.Result.Text;
-
-            if (escribiendo && textoDictado.ToLower() == "detener dictado")
-            {
-                DetenerDictado();
-                return;
-            }
-
-            if (escribiendo)
-            {
-                try
-                {
-                    Process? notepad = Process.GetProcessesByName("notepad").FirstOrDefault();
-
-                    if (notepad == null)
-                    {
-                        notepad = Process.Start("notepad.exe");
-                        notepad.WaitForInputIdle();
-                    }
-                    SetForegroundWindow(notepad.MainWindowHandle);
-
-                    InputSimulator sim = new InputSimulator();
-                    sim.Keyboard.TextEntry(textoDictado);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Error al dictar en Notepad: " + ex.Message);
-                }
-            }
-        }
-
-        private void DetenerDictado()
-        {
-            escribiendo = false;
-
-            recognizer.SpeechRecognized -= IniciarDictadoEnNotepad;
-
-            recognizer.SpeechRecognized += Recognizer_SpeechRecognized;
-
-            txtResultado.Text = "Modo de dictado detenido. Ahora puedes usar comandos.";
-
-            recognizer.UnloadAllGrammars();
-
-            recognizer.LoadGrammar(grammarComandos);
-
-        }
+        private void AbrirCalculadora() => Process.Start("calc.exe");
+        private void AbrirNotepad() => Process.Start("notepad.exe");
 
         private void AbrirNavegador(string url)
         {
-            try
+            Process.Start(new ProcessStartInfo
             {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "chrome",
-                    Arguments = "--new-tab " + url,
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Error al abrir el navegador: " + ex.Message);
-            }
+                FileName = "chrome",
+                Arguments = "--new-tab " + url,
+                UseShellExecute = true
+            });
         }
 
-        private void AbrirInstagram()
-        {
-            AbrirNavegador("https://www.instagram.com");
-        }
+        private void AbrirInstagram() => AbrirNavegador("https://www.instagram.com");
+        private void AbrirChatGPT() => AbrirNavegador("https://chat.openai.com");
+        private void AbrirYouTube() => AbrirNavegador("https://www.youtube.com");
+        private void AbrirTwitch() => AbrirNavegador("https://www.twitch.tv");
+        private void AbrirKick() => AbrirNavegador("https://www.kick.com");
 
-
-        private void AbrirChatGPT()
-        {
-            AbrirNavegador("https://chat.openai.com");
-        }
-
-
-        private void AbrirYouTube()
-        {
-            AbrirNavegador("https://www.youtube.com");
-        }
-
-
-        private void AbrirTwitch()
-        {
-            AbrirNavegador("https://www.twitch.tv");
-        }
-
-
-        private void AbrirKick()
-        {
-            AbrirNavegador("https://www.kick.com");
-        }
 
         [DllImport("user32.dll")]
         public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        //METODOS COMENTADOS HASTA QUE SE ENCUENTRE UN RECONOCEDOR DE VOZ MEJOR
+
+        //private void IniciarDictado()
+        //{
+        //    escribiendo = true;
+
+        //    txtResultado.Text = "Modo de dictado activado. Di algo para escribir.";
+
+        //    recognizer.SpeechRecognized -= Recognizer_SpeechRecognized;
+
+        //    recognizer.LoadGrammar(new DictationGrammar());
+
+        //    recognizer.SpeechRecognized += IniciarDictadoEnNotepad;
+        //}
+
+
+
+        //private void IniciarDictadoEnNotepad(object? sender, SpeechRecognizedEventArgs e)
+        //{
+        //    string textoDictado = e.Result.Text;
+
+        //    if (escribiendo && textoDictado.ToLower() == "detener dictado")
+        //    {
+        //        DetenerDictado();
+        //        return;
+        //    }
+
+        //    if (escribiendo)
+        //    {
+        //        try
+        //        {
+        //            Process? notepad = Process.GetProcessesByName("notepad").FirstOrDefault();
+
+        //            if (notepad == null)
+        //            {
+        //                notepad = Process.Start("notepad.exe");
+        //                notepad.WaitForInputIdle();
+        //            }
+        //            SetForegroundWindow(notepad.MainWindowHandle);
+
+        //            InputSimulator sim = new InputSimulator();
+        //            sim.Keyboard.TextEntry(textoDictado);
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            MessageBox.Show("Error al dictar en Notepad: " + ex.Message);
+        //        }
+        //    }
+        //}
+
+        //private void DetenerDictado()
+        //{
+        //    escribiendo = false;
+
+        //    recognizer.SpeechRecognized -= IniciarDictadoEnNotepad;
+
+        //    recognizer.SpeechRecognized += Recognizer_SpeechRecognized;
+
+        //    txtResultado.Text = "Modo de dictado detenido. Ahora puedes usar comandos.";
+
+        //    recognizer.UnloadAllGrammars();
+
+        //    recognizer.LoadGrammar(grammarComandos);
+
+        //}
     }
 }
